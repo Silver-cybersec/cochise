@@ -1,0 +1,86 @@
+[
+  {
+    "id": "F-C1",
+    "severity": "high",
+    "category": "code-security",
+    "path": "src/cochise/ssh_connection.py",
+    "lines": [19],
+    "commit_sha": "4db4fded894305083366b83e5cdba5fb68fcebc3",
+    "evidence_url": "https://github.com/andreashappe/cochise/blob/4db4fded894305083366b83e5cdba5fb68fcebc3/src/cochise/ssh_connection.py#L19",
+    "status": "confirmed-static",
+    "description": "SSH 连接显式传入 known_hosts=None，不校验服务器主机密钥。口令认证会发给任何应答该地址的一端。通道打开失败时会重连，重连仍不校验主机密钥。Issue #13 描述了该点，但其文件路径已与本树不符。未做动态复现，未写成已验证利用。",
+    "recommendation": "使用操作者管理的 known_hosts，去掉 known_hosts=None。首次见到的主机密钥应单独确认。"
+  },
+  {
+    "id": "F-C2",
+    "severity": "high",
+    "category": "code-security",
+    "path": "src/cochise/executor.py",
+    "lines": [12, 14, 133, 144, 158, 164],
+    "commit_sha": "4db4fded894305083366b83e5cdba5fb68fcebc3",
+    "evidence_url": "https://github.com/andreashappe/cochise/blob/4db4fded894305083366b83e5cdba5fb68fcebc3/src/cochise/executor.py#L12",
+    "status": "confirmed-static",
+    "description": "执行器把 SSH 标准输出（标准错误已合并）原样写入模型的 tool 消息，下一轮模型给出的 command 经已注册的 execute_command 在同一 SSH 账户上执行。没有命令白名单、人工确认或输出与指令的隔离。同一轮多个工具调用并行执行。影响面是 TARGET_HOST 上的 SSH 账户；源码没有本地 shell。只有把 TARGET_HOST 指到运行本进程的机器时，命令才会落在该机器上。这是产品功能缺少边界，不是靶场关卡。Issue #13 将它与 F-C1 串成二阶段命令执行；本单未动态复现。",
+    "recommendation": "把远端输出当数据隔离，不要直接成为下一轮指令。对将要执行的命令增加操作者确认或白名单，并限制单轮并行。"
+  },
+  {
+    "id": "F-C3",
+    "severity": "medium",
+    "category": "code-security",
+    "path": "src/cochise/logger.py",
+    "lines": [105, 112],
+    "commit_sha": "4db4fded894305083366b83e5cdba5fb68fcebc3",
+    "evidence_url": "https://github.com/andreashappe/cochise/blob/4db4fded894305083366b83e5cdba5fb68fcebc3/src/cochise/logger.py#L105",
+    "status": "confirmed-static",
+    "description": "工具参数和结果以明文写入 logs/run-*.json，其中包含知识库口令字段和命令输出。运行日志被 .gitignore 排除，但 examples/run-trajectories/ 已入库：59 个文件中 31 个含非空 password 字段，共 530 处；2 个文件含 PKCS#8 私钥横幅；另有 3 个文件含 sk- 前缀片段。值未摘录，未判断是否仍有效，也未判断是否只是公开实验靶场材料。",
+    "recommendation": "日志与示例轨迹在入库前去掉口令、密钥和令牌。运行日志保持在被忽略的 logs/ 下。"
+  },
+  {
+    "id": "F-C4",
+    "severity": "medium",
+    "category": "code-security",
+    "path": "src/cochise/common.py",
+    "lines": [49, 54],
+    "commit_sha": "4db4fded894305083366b83e5cdba5fb68fcebc3",
+    "evidence_url": "https://github.com/andreashappe/cochise/blob/4db4fded894305083366b83e5cdba5fb68fcebc3/src/cochise/common.py#L49",
+    "status": "confirmed-static",
+    "description": "每次 litellm.completion 都把完整消息发出去。规划提示要求写入完整口令、哈希和令牌，执行器又把命令输出送回模型。目的地由 LITELLM_MODEL 决定，代码没有主机白名单，也没有脱敏。配置日志不记录 API 密钥和 SSH 口令。这是操作者选定的模型数据流，不是单独的隐蔽上报。代码未关闭 litellm 自身遥测；该版本是否默认上报未读其源码，未核实。",
+    "recommendation": "只向明确选定的模型端点发送数据，并在出站前去掉口令与令牌。核对并关闭所用 litellm 版本的遥测。"
+  },
+  {
+    "id": "F-C5",
+    "severity": "low",
+    "category": "code-security",
+    "path": "Dockerfile",
+    "lines": [12, 14],
+    "commit_sha": "4db4fded894305083366b83e5cdba5fb68fcebc3",
+    "evidence_url": "https://github.com/andreashappe/cochise/blob/4db4fded894305083366b83e5cdba5fb68fcebc3/Dockerfile#L12",
+    "status": "confirmed-static",
+    "description": "Dockerfile 把 TARGET_USERNAME=root、TARGET_PASSWORD=kali、TARGET_HOST=192.168.56.100 写成镜像环境变量。README 示例是同一组实验值。SSHConnection 数据类另有缺省口令 changeme，主入口的环境变量工厂在变量缺失时直接退出，不会用到该缺省。当前 Dockerfile 与源码树不一致，按字面构建到不了这组环境变量；未实测构建。",
+    "recommendation": "去掉镜像里的缺省口令。数据类缺省不要保留可用口令。实验口令只放在被忽略的 .env。"
+  },
+  {
+    "id": "F-S1",
+    "severity": "medium",
+    "category": "supply-chain",
+    "path": "uv.lock",
+    "lines": [190, 191],
+    "commit_sha": "4db4fded894305083366b83e5cdba5fb68fcebc3",
+    "evidence_url": "https://github.com/andreashappe/cochise/blob/4db4fded894305083366b83e5cdba5fb68fcebc3/uv.lock#L190",
+    "status": "confirmed-static",
+    "description": "锁文件中的 certifi 2026.7.22 落在 GHSA-6q48-6c7w-9gw2（别名 PYSEC-2026-4320）的影响范围内，修复版本为 2026.10.18。公告称该版本仍带有中间密钥已泄露的 emSign 根。certifi 经 httpx（litellm）和 requests 进入依赖树，模型 API 的 TLS 会用到这套信任库。需要在路径上且持有对应密钥才能拦截。查询时间 2026-11-26 10:27 香港时间。未做动态验证。",
+    "recommendation": "把 certifi 升到公告给出的修复版本并重新锁定。继续用 uv.lock 的哈希安装，避免只按 pyproject 的范围浮动解析。"
+  },
+  {
+    "id": "F-S2",
+    "severity": "low",
+    "category": "supply-chain",
+    "path": "uv.lock",
+    "lines": [1029, 1030],
+    "commit_sha": "4db4fded894305083366b83e5cdba5fb68fcebc3",
+    "evidence_url": "https://github.com/andreashappe/cochise/blob/4db4fded894305083366b83e5cdba5fb68fcebc3/uv.lock#L1029",
+    "status": "version-in-range-reachability-unconfirmed",
+    "description": "直接依赖 litellm 锁定为 1.95.0，且 pyproject 未写上界。该版本落在 GHSA-3cv6-jpf6-8222（1.95.0 至 1.95.1 之前）和 GHSA-7hp6-4w63-5g45（1.91.0 至 1.100.4 之前）的范围内。两则公告描述的是 LiteLLM proxy 的已认证 SSRF、凭据外带和代理管理员提权。本仓只调用 litellm.completion，没有启动 proxy 的代码。可达性未确认。未实测。",
+    "recommendation": "若不使用 proxy，保持只调用客户端补全接口，并把 litellm 钉到已修复版本后更新锁文件。"
+  }
+]
